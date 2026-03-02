@@ -95,7 +95,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```bash
 cd /opt
 sudo git clone https://github.com/Prashant9876/IoT_APIS.git iot_apis
-cd /opt/iot_apis
+cd /opt/IoT_Apis
 chmod +x scripts/ec2_bootstrap.sh
 ./scripts/ec2_bootstrap.sh https://github.com/Prashant9876/IoT_APIS.git ubuntu
 ```
@@ -103,7 +103,7 @@ chmod +x scripts/ec2_bootstrap.sh
 Then edit:
 
 ```bash
-nano /opt/iot_apis/.env
+nano /opt/IoT_Apis/.env
 ```
 
 Start service:
@@ -127,3 +127,28 @@ sudo systemctl status iot-apis
 - Pulls latest code
 - Installs dependencies
 - Restarts `iot-apis` systemd service
+
+## Test Cases (CI Gate Before Deploy)
+
+CI now runs tests before deployment. Deployment to EC2 runs only when tests pass.
+
+### Test files
+
+- `tests/conftest.py`: test environment setup
+- `tests/test_api.py`: endpoint test cases
+- `requirements-dev.txt`: test dependencies (`pytest`, `httpx`)
+
+### Run tests locally
+
+```bash
+cd /Users/prashantsingh/Desktop/innofarm/AWS_IoT_APIS
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+### CI behavior
+
+- On `pull_request` to `main`: run tests only
+- On `push` to `main`: run tests, then deploy to EC2 if tests pass

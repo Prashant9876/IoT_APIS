@@ -1,17 +1,60 @@
-name: Deploy to EC2
+name: Test and Deploy to EC2
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest -q
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload release files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT }}
+          source: |
+            app/**
+            scripts/**
+            deploy/**
+            requirements.txt
+            requirements-dev.txt
+            .env.example
+            README.md
+          target: "/home/ubuntu/iot_apis_release"
 
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
@@ -22,10 +65,9 @@ jobs:
           port: ${{ secrets.EC2_PORT }}
           script: |
             set -e
-            if [ ! -d /opt/iot_apis/.git ]; then
-              echo "Repository not bootstrapped on EC2. Run scripts/ec2_bootstrap.sh once on the server first."
-              exit 1
-            fi
-            cd /opt/iot_apis
+            sudo mkdir -p /opt/IoT_Apis
+            sudo cp -a /home/ubuntu/iot_apis_release/. /opt/IoT_Apis/
+            sudo chown -R ubuntu:ubuntu /opt/IoT_Apis
+            cd /opt/IoT_Apis
             chmod +x scripts/deploy_on_ec2.sh
             ./scripts/deploy_on_ec2.sh

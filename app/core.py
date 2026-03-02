@@ -18,6 +18,7 @@ MQTT_USERNAME = os.getenv("MQTT_USERNAME")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
 MQTT_TLS = os.getenv("MQTT_TLS", "false").lower() in ("true", "1", "yes")
 MQTT_KEEPALIVE = int(os.getenv("MQTT_KEEPALIVE", "60"))
+SKIP_MQTT_CONNECT = os.getenv("SKIP_MQTT_CONNECT", "false").lower() in ("true", "1", "yes")
 
 if not API_KEY:
     raise RuntimeError("Server misconfigured: API_KEY missing in environment")
@@ -100,7 +101,8 @@ mqtt_client = MQTTClientWrapper(
     keepalive=MQTT_KEEPALIVE,
 )
 
-mqtt_client.connect()
+if not SKIP_MQTT_CONNECT:
+    mqtt_client.connect()
 
 
 def validate_api_key(x_api_key: str):

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="/opt/iot_apis"
+APP_DIR="/opt/IoT_Apis"
 SERVICE_NAME="iot-apis"
 REPO_URL="${1:-https://github.com/Prashant9876/IoT_APIS.git}"
 RUN_USER="${2:-ubuntu}"

@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 User=__RUN_USER__
-WorkingDirectory=/opt/iot_apis
-EnvironmentFile=/opt/iot_apis/.env
-ExecStart=/opt/iot_apis/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+WorkingDirectory=/opt/IoT_Apis
+EnvironmentFile=/opt/IoT_Apis/.env
+ExecStart=/opt/IoT_Apis/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=3
 
