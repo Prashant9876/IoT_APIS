@@ -1,4 +1,9 @@
 import os
+import sys
+from pathlib import Path
+
+# Ensure project root is importable in all runners (local/CI/VM).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Test-safe defaults so app import does not fail.
 os.environ.setdefault("API_KEY", "test-api-key")

@@ -87,14 +87,16 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `.github/workflows/deploy-ec2.yml`: deploy pipeline on push to `main`
 - `scripts/ec2_bootstrap.sh`: one-time EC2 setup
 - `scripts/deploy_on_ec2.sh`: deploy script executed on EC2
+- `scripts/install_service.sh`: installs/enables `iot-apis` systemd service
 - `deploy/ec2/iot-apis.service`: systemd service unit template
+- `deploy/nginx/api-iot.innofarms.ai.conf`: Nginx reverse proxy config
 - `.env.example`: environment template
 
 ### One-time setup on EC2
 
 ```bash
 cd /opt
-sudo git clone https://github.com/Prashant9876/IoT_APIS.git iot_apis
+sudo git clone https://github.com/Prashant9876/IoT_APIS.git IoT_Apis
 cd /opt/IoT_Apis
 chmod +x scripts/ec2_bootstrap.sh
 ./scripts/ec2_bootstrap.sh https://github.com/Prashant9876/IoT_APIS.git ubuntu
@@ -109,7 +111,8 @@ nano /opt/IoT_Apis/.env
 Start service:
 
 ```bash
-sudo systemctl start iot-apis
+chmod +x scripts/install_service.sh
+./scripts/install_service.sh ubuntu
 sudo systemctl status iot-apis
 ```
 
@@ -124,8 +127,9 @@ sudo systemctl status iot-apis
 
 - Push any commit to `main`
 - GitHub Action SSHes to EC2
-- Pulls latest code
-- Installs dependencies
+- Uploads latest code to `/home/ubuntu/iot_apis_release`
+- Syncs code to `/opt/IoT_Apis`
+- Installs dependencies (if needed)
 - Restarts `iot-apis` systemd service
 
 ## Test Cases (CI Gate Before Deploy)

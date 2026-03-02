@@ -15,13 +15,13 @@ def test_health_endpoint_returns_mqtt_status_key():
 
 
 def test_backend_publisher_requires_api_key():
-    response = client.post("/BackendMqttPublisher", json={"DN": "IDC", "FarmID": "F001"})
+    response = client.post("/api/irrigation", json={"DN": "IDC", "FarmID": "F001"})
     assert response.status_code == 403
 
 
 def test_backend_publisher_missing_required_keys():
     response = client.post(
-        "/BackendMqttPublisher",
+        "/api/irrigation",
         headers={"x-api-key": API_KEY},
         json={"DN": "IDC"},
     )
@@ -31,7 +31,7 @@ def test_backend_publisher_missing_required_keys():
 def test_backend_publisher_success():
     payload = {"DN": "IDC", "FarmID": "F001", "DeviceID": "D01"}
     response = client.post(
-        "/BackendMqttPublisher",
+        "/api/irrigation",
         headers={"x-api-key": API_KEY},
         json=payload,
     )
@@ -52,7 +52,7 @@ def test_fertigation_invalid_cmd_rejected():
         "pH": {"LL": 5, "HL": 6},
     }
     response = client.post(
-        "/BackendMqttfertigation",
+        "/api/fertigation",
         headers={"x-api-key": API_KEY},
         json=payload,
     )
@@ -68,7 +68,7 @@ def test_fertigation_success_and_float_conversion():
         "pH": {"LL": "5.5", "HL": "6.5"},
     }
     response = client.post(
-        "/BackendMqttfertigation",
+        "/api/fertigation",
         headers={"x-api-key": API_KEY},
         json=payload,
     )
@@ -84,7 +84,7 @@ def test_fertigation_success_and_float_conversion():
 def test_robot_endpoint_success():
     payload = {"DN": "RB", "FarmID": "F002", "DeviceID": "R1"}
     response = client.post(
-        "/BackendAcutatorCmd",
+        "/api/robot",
         headers={"x-api-key": API_KEY},
         json=payload,
     )
