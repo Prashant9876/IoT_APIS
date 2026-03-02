@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+
+# OS/editor noise
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log

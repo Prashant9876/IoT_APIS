@@ -1,0 +1,31 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT }}
+          script: |
+            set -e
+            if [ ! -d /opt/iot_apis/.git ]; then
+              echo "Repository not bootstrapped on EC2. Run scripts/ec2_bootstrap.sh once on the server first."
+              exit 1
+            fi
+            cd /opt/iot_apis
+            chmod +x scripts/deploy_on_ec2.sh
+            ./scripts/deploy_on_ec2.sh
