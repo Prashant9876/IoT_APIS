@@ -10,7 +10,7 @@ async def backend_mqtt_publisher(request: Request, x_api_key: str = Header(None)
     validate_api_key(x_api_key)
     payload = await request.json()
 
-    require_keys(payload, ("DN", "FarmID"), "Missing required keys: DN or FarmID")
+    require_keys(payload, ("DN", "FarmID", "DeviceID"), "Missing required keys: DN or FarmID")
 
     if "shelf_id" in payload and "rack_id" in payload:
         payload["shelf_id"] = payload["shelf_id"]
@@ -24,7 +24,7 @@ async def backend_mqtt_fertigation(request: Request, x_api_key: str = Header(Non
     validate_api_key(x_api_key)
     payload = await request.json()
 
-    require_keys(payload, ("DN", "FarmID", "cmd", "eC", "pH"), "Missing required keys")
+    require_keys(payload, ("DN", "FarmID", "cmd", "eC", "pH", "DeviceID"), "Missing required keys")
 
     if payload["cmd"] != "change_limits":
         raise HTTPException(status_code=400, detail="Invalid cmd. Expected: change_limits")
