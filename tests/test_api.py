@@ -47,6 +47,7 @@ def test_fertigation_invalid_cmd_rejected():
     payload = {
         "DN": "FU",
         "FarmID": "F001",
+        "DeviceID": "D01",
         "cmd": "wrong_cmd",
         "eC": {"LL": 1, "HL": 2},
         "pH": {"LL": 5, "HL": 6},
@@ -63,6 +64,7 @@ def test_fertigation_success_and_float_conversion():
     payload = {
         "DN": "FU",
         "FarmID": "F001",
+        "DeviceID": "D01",
         "cmd": "change_limits",
         "eC": {"LL": "1.2", "HL": "2.4"},
         "pH": {"LL": "5.5", "HL": "6.5"},
