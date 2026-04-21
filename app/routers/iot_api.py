@@ -70,6 +70,17 @@ async def backend_mqtt_fertigation(request: Request, x_api_key: str = Header(Non
             raise HTTPException(status_code=400, detail="Invalid numeric values in calibration payload")
 
         return publish_and_response(payload)
+    elif payload["cmd"] == "change_Mode":
+        require_keys(payload, ( "pH", "eC"),"Missing calibration fields")
+        try:
+        # Convert to numeric (int or float based on your use case)
+            payload["pH"] = int(payload["pH"])
+            payload["eC"] = int(payload["eC"])
+
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid numeric values in mode payload")
+
+        return publish_and_response(payload)
 
     else:
         raise HTTPException(status_code=400, detail="Invalid cmd. Expected: change_limits or change_calibration")
