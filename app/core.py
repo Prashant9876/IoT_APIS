@@ -122,7 +122,7 @@ def get_mqtt_topic(payload: dict):
         raise ValueError("Missing required keys: FarmID or DN")
     if dn == "IDC":
         return f"farm/{farm_id}/IIrrigation"
-    if dn == "FU":
+    if dn in {"FU", "FUD"}:
         return f"farm/{farm_id}/fertigation"
     return f"farm/{farm_id}/SSub"
 
