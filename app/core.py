@@ -3,6 +3,7 @@ import logging
 import os
 import threading
 import time
+import copy
 from typing import Iterable
 
 from dotenv import load_dotenv
@@ -28,7 +29,16 @@ logger = logging.getLogger("BackendMqttPublisher")
 
 
 class MQTTClientWrapper:
-    def __init__(self, host, port, username=None, password=None, tls=False, keepalive=60):
+    def __init__(
+        self,
+        host,
+        port,
+        username=None,
+        password=None,
+        tls=False,
+        keepalive=60,
+        start_loop=True,
+    ):
         self.host = host
         self.port = port
         self.username = username
@@ -47,7 +57,8 @@ class MQTTClientWrapper:
 
         self.connected = False
         self._connect_lock = threading.Lock()
-        self.client.loop_start()
+        if start_loop:
+            self.client.loop_start()
 
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
@@ -99,6 +110,7 @@ mqtt_client = MQTTClientWrapper(
     password=MQTT_PASSWORD,
     tls=MQTT_TLS,
     keepalive=MQTT_KEEPALIVE,
+    start_loop=not SKIP_MQTT_CONNECT,
 )
 
 if not SKIP_MQTT_CONNECT:
@@ -129,6 +141,18 @@ def get_mqtt_topic(payload: dict):
 
 def publish_and_response(payload: dict):
     topic = get_mqtt_topic(payload)
-    mqtt_client.publish(topic, payload)
+    
+    farm_id = payload.get("FarmID")
+    API_Topic = f"farm/{farm_id}/api"
+
+    payload["Mqtt_topic"] = topic
+    mqtt_client.publish(API_Topic, payload)
+    clean_payload = copy.deepcopy(payload)
+    clean_payload.pop("meta", None)
+    clean_payload.pop("Mqtt_topic", None)
+
+    mqtt_client.publish(topic, clean_payload)
+
     logger.info("Published to topic %s: %s", topic, json.dumps(payload))
     return {"status": "accepted", "topic": topic, "payload": payload}
+

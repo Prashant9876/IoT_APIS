@@ -1,6 +1,11 @@
+import os
+
 from fastapi.testclient import TestClient
 
+os.environ.setdefault("SKIP_MQTT_CONNECT", "true")
+
 from app.main import app
+from app import core
 
 client = TestClient(app)
 API_KEY = "test-api-key"
@@ -95,3 +100,34 @@ def test_robot_endpoint_success():
     body = response.json()
     assert body["status"] == "accepted"
     assert body["topic"] == "farm/F002/SSub"
+
+
+def test_irrigation_publishes_api_and_device_topics_with_meta(monkeypatch):
+    calls = []
+
+    def fake_publish(topic, payload, qos=1, retain=False):
+        calls.append((topic, payload))
+
+    monkeypatch.setattr(core.mqtt_client, "publish", fake_publish)
+
+    payload = {"DN": "IDC", "FarmID": "F001", "DeviceID": "D01"}
+    response = client.post(
+        "/api/irrigation",
+        headers={"x-api-key": API_KEY, "x-forwarded-for": "203.0.113.11"},
+        json=payload,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["topic"] == "farm/F001/IIrrigation"
+    assert "meta" in body["payload"]
+    assert body["payload"]["meta"]["forwarded_ip"] == "203.0.113.11"
+    assert body["payload"]["Mqtt_topic"] == "farm/F001/IIrrigation"
+
+    assert len(calls) == 2
+    assert calls[0][0] == "farm/F001/api"
+    assert calls[1][0] == "farm/F001/IIrrigation"
+    assert "meta" in calls[0][1]
+    assert "Mqtt_topic" in calls[0][1]
+    assert "meta" not in calls[1][1]
+    assert "Mqtt_topic" not in calls[1][1]
