@@ -50,8 +50,7 @@ async def backend_mqtt_fertigation(request: Request, x_api_key: str = Header(Non
     }
 
     require_keys(payload, ("DN", "FarmID", "cmd", "DeviceID"), "Missing required keys")
-    if str(payload.get("FarmID")) == "120":
-        payload["DeviceID"] = "IFFUD1190000001"
+    
 
     if payload["cmd"] == "change_limits" :
         required_subkeys = ("LL", "HL")
