@@ -58,6 +58,8 @@ async def backend_mqtt_fertigation(request: Request, x_api_key: str = Header(Non
 
         if not all(k in payload["pH"] for k in required_subkeys):
             raise HTTPException(status_code=400, detail="Missing LL/HL inside pH")
+        if payload["FarmID"] == "120":
+            payload["DeviceID"] = "IFFNC1200000001"
         
         payload["eC"]["LL"] = float(payload["eC"]["LL"])
         payload["eC"]["HL"] = float(payload["eC"]["HL"])
