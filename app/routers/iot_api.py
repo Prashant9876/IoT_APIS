@@ -50,6 +50,8 @@ async def backend_mqtt_fertigation(request: Request, x_api_key: str = Header(Non
     }
 
     require_keys(payload, ("DN", "FarmID", "cmd", "DeviceID"), "Missing required keys")
+    if str(payload.get("FarmID")) == "120":
+        payload["DeviceID"] = "IFFUD1190000001"
 
     if payload["cmd"] == "change_limits" :
         required_subkeys = ("LL", "HL")
@@ -58,8 +60,6 @@ async def backend_mqtt_fertigation(request: Request, x_api_key: str = Header(Non
 
         if not all(k in payload["pH"] for k in required_subkeys):
             raise HTTPException(status_code=400, detail="Missing LL/HL inside pH")
-        if payload["FarmID"] == "120":
-            payload["DeviceID"] = "IFFUD1190000001"
         
         payload["eC"]["LL"] = float(payload["eC"]["LL"])
         payload["eC"]["HL"] = float(payload["eC"]["HL"])
@@ -110,7 +110,7 @@ async def backend_mqtt_fertigation(request: Request, x_api_key: str = Header(Non
         return publish_and_response(payload)
 
     else:
-        raise HTTPException(status_code=400, detail="Invalid cmd. Expected: change_limits or change_calibration")
+        raise HTTPException(status_code=400, detail="Invalid cmd. Expected: change_limits, change_calibration, or change_Mode")
 
 
 
