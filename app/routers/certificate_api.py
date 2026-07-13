@@ -6,95 +6,24 @@ import re
 import subprocess
 import tempfile
 from typing import List
+from unittest import result
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core import validate_api_key
+from app import core
+
 
 router = APIRouter()
 
-DEVICE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
-
-
-class GenerateCertificateRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    farm_id: str = Field(..., alias="farmID")
-    device_ids_list: List[str] = Field(..., alias="DeviceIDS_list")
-    dry_run: bool = Field(False, alias="dry_run")
-
-
-def _run_cmd(cmd: List[str]) -> None:
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as exc:
-        stderr = (exc.stderr or "").strip()
-        raise HTTPException(
-            status_code=500,
-            detail=f"OpenSSL command failed: {stderr or 'unknown error'}",
-        ) from exc
-
-
-def _validate_device_ids(device_ids: List[str]) -> List[str]:
-    cleaned: List[str] = []
-    seen = set()
-    duplicates = set()
-    invalid = []
-
-    for raw in device_ids:
-        device_id = raw.strip()
-        if not device_id or not DEVICE_ID_PATTERN.fullmatch(device_id):
-            invalid.append(raw)
-            continue
-        if device_id in seen:
-            duplicates.add(device_id)
-            continue
-        cleaned.append(device_id)
-        seen.add(device_id)
-
-    if invalid or duplicates:
-        parts = []
-        if invalid:
-            parts.append(f"invalid ids: {sorted(invalid)}")
-        if duplicates:
-            parts.append(f"duplicate ids: {sorted(duplicates)}")
-        raise HTTPException(status_code=400, detail="; ".join(parts))
-
-    return cleaned
-
-
-def _upload_text_object(
-    s3_client,
-    bucket: str,
-    key: str,
-    body: bytes,
-    kms_key_id: str,
-    content_type: str,
-) -> None:
-    extra_args = {"ServerSideEncryption": "AES256"}
-    if kms_key_id:
-        extra_args = {
-            "ServerSideEncryption": "aws:kms",
-            "SSEKMSKeyId": kms_key_id,
-        }
-
-    s3_client.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=body,
-        ContentType=content_type,
-        **extra_args,
-    )
-
 
 @router.post("/generate_certificate")
-async def generate_certificate(
-    request: GenerateCertificateRequest, x_api_key: str = Header(None)
-):
-    validate_api_key(x_api_key)
+async def generate_certificate( request: core.GenerateCertificateRequest, x_api_key: str = Header(None)):
+    
+    core.validate_api_key(x_api_key)
+
 
     farm_id = request.farm_id.strip()
     if not farm_id:
@@ -103,174 +32,76 @@ async def generate_certificate(
     if "/" in farm_id:
         raise HTTPException(status_code=400, detail="farmID must not contain '/'")
 
-    if not request.device_ids_list:
+    if not request.Device_Id:
         raise HTTPException(status_code=400, detail="DeviceIDS_list must not be empty")
+     
+    # check that the csr_pem is valid and matches the device_id
+    core.validate_device_csr(
+        csr_pem=request.csr_pem,
+        device_id=request.Device_Id.strip(),
+    )  
+    # check that we have already asign the certificate to this  device or not 
+    result = core.validate_device_IDS(request.Device_Id.strip()) 
+    print(result)         
 
-    device_ids = _validate_device_ids(request.device_ids_list)
+    if  "certificate_assigned" not  in result :
+        raise HTTPException(status_code=400, detail=f"Server Error :- certificate_assigned key is missing in the result for this {request.Device_Id}")
 
-    ca_crt_path = os.getenv("CERT_CA_CRT_PATH", "/etc/mosquitto/certs/ca.crt")
-    ca_key_path = os.getenv("CERT_CA_KEY_PATH", "/etc/mosquitto/certs/ca.key")
-    bucket = os.getenv("CERT_S3_BUCKET", "IoT_certificate")
-    region = os.getenv("AWS_REGION", "ap-south-1")
-    kms_key_id = os.getenv("CERT_S3_KMS_KEY_ID", "")
-    validity_days = int(os.getenv("CERT_VALIDITY_DAYS", "3650"))
-
-    country = os.getenv("CERT_SUBJ_COUNTRY", "IN")
-    state = os.getenv("CERT_SUBJ_STATE", "Karnataka")
-    locality = os.getenv("CERT_SUBJ_LOCALITY", "Bengaluru")
-    org = os.getenv("CERT_SUBJ_ORG", "Innofarm")
-
-    if not pathlib.Path(ca_crt_path).is_file() or not pathlib.Path(ca_key_path).is_file():
+    if result["certificate_assigned"] is None :
         raise HTTPException(
-            status_code=500,
-            detail="CA files are missing. Configure CERT_CA_CRT_PATH and CERT_CA_KEY_PATH.",
+            status_code=400,
+            detail=f"device_id {request.Device_Id} is not found in the database. Please check the device ID and try again."
+        )  
+      
+    if result["certificate_assigned"] is True:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Certs are already generated on {result['certificate_assigned_at']} for this {request.Device_Id}"
+        )    
+    
+    if result["certificate_assigned"] is False and request.dry_run is False:
+
+        cert_data = core.generate_device_certificate_from_csr(
+            csr_pem=request.csr_pem,
+            device_id=request.Device_Id.strip(),
         )
+        root_ca_key_pem, root_ca_pem = core.get_mqtt_ca_from_secrets_manager()
 
-    try:
-        s3_client = boto3.client("s3", region_name=region)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to initialize S3 client: {exc}") from exc
+        is_valid = core.verify_generated_device_cert(
+            device_crt_pem=cert_data["device_crt"],
+            csr_pem=request.csr_pem,
+            root_ca_pem=root_ca_pem,
+            expected_device_id=request.Device_Id.strip(),
+        )
+        if is_valid:
+            # upload to s3 and update the post sql then after successfully then reply .
+            success = core.upload_device_crt_to_s3(farm_id, cert_data)
 
-    created = []
-    failed = []
-    now_utc = dt.datetime.now(dt.timezone.utc).isoformat()
+            if not success["success"]:
+                raise HTTPException(status_code=500, detail="Failed to upload certificate to S3")
+            
+            update_result = core.update_certificate_assigned(request.Device_Id.strip())
+            print(update_result)
+            if update_result["success"] is False:
+                raise HTTPException(status_code=500, detail="Failed to update certificate assignment in the database")
+            
+        return {
+            "success": True,
+            "device_id": request.Device_Id.strip(),
+            "device_crt": cert_data["device_crt"]
+        }
+    
+    if result["certificate_assigned"] is False and request.dry_run is True:
+        return {
+            "success": True,
+            "dry_run": True,
+            "device_id": request.Device_Id.strip(),
+            "message": "CSR is valid and certificate can be generated."
+        }
 
-    try:
-        with tempfile.TemporaryDirectory(prefix="mqtt-certs-") as tmp:
-            work_dir = pathlib.Path(tmp)
-            serial_file = work_dir / "ca.srl"
+    
 
-            for device_id in device_ids:
-                s3_prefix = f"{farm_id}/{device_id}"
-                try:
-                    if not request.dry_run:
-                        key_path = work_dir / f"{device_id}.key"
-                        csr_path = work_dir / f"{device_id}.csr"
-                        crt_path = work_dir / f"{device_id}.crt"
 
-                        subject = (
-                            f"/C={country}/ST={state}/L={locality}"
-                            f"/O={org}/OU=Devices/CN={device_id}"
-                        )
 
-                        _run_cmd(["openssl", "genrsa", "-out", str(key_path), "2048"])
-                        _run_cmd(
-                            [
-                                "openssl",
-                                "req",
-                                "-new",
-                                "-key",
-                                str(key_path),
-                                "-subj",
-                                subject,
-                                "-out",
-                                str(csr_path),
-                            ]
-                        )
 
-                        sign_cmd = [
-                            "openssl",
-                            "x509",
-                            "-req",
-                            "-in",
-                            str(csr_path),
-                            "-CA",
-                            ca_crt_path,
-                            "-CAkey",
-                            ca_key_path,
-                            "-CAserial",
-                            str(serial_file),
-                            "-out",
-                            str(crt_path),
-                            "-days",
-                            str(validity_days),
-                            "-sha256",
-                        ]
-                        if not serial_file.exists():
-                            sign_cmd.append("-CAcreateserial")
-                        _run_cmd(sign_cmd)
-                        csr_path.unlink(missing_ok=True)
 
-                        with open(ca_crt_path, "rb") as f:
-                            _upload_text_object(
-                                s3_client=s3_client,
-                                bucket=bucket,
-                                key=f"{s3_prefix}/ca.crt",
-                                body=f.read(),
-                                kms_key_id=kms_key_id,
-                                content_type="application/x-pem-file",
-                            )
-
-                        with open(crt_path, "rb") as f:
-                            _upload_text_object(
-                                s3_client=s3_client,
-                                bucket=bucket,
-                                key=f"{s3_prefix}/client.crt",
-                                body=f.read(),
-                                kms_key_id=kms_key_id,
-                                content_type="application/x-pem-file",
-                            )
-
-                        with open(key_path, "rb") as f:
-                            _upload_text_object(
-                                s3_client=s3_client,
-                                bucket=bucket,
-                                key=f"{s3_prefix}/client.key",
-                                body=f.read(),
-                                kms_key_id=kms_key_id,
-                                content_type="application/x-pem-file",
-                            )
-
-                        metadata = {
-                            "farmID": farm_id,
-                            "device_id": device_id,
-                            "issued_at_utc": now_utc,
-                            "validity_days": validity_days,
-                            "bucket": bucket,
-                            "prefix": farm_id,
-                        }
-                        _upload_text_object(
-                            s3_client=s3_client,
-                            bucket=bucket,
-                            key=f"{s3_prefix}/metadata.json",
-                            body=json.dumps(metadata, indent=2).encode("utf-8"),
-                            kms_key_id=kms_key_id,
-                            content_type="application/json",
-                        )
-
-                    created.append(
-                        {
-                            "device_id": device_id,
-                            "s3_path": f"s3://{bucket}/{s3_prefix}/",
-                            "mode": "dry_run" if request.dry_run else "generated",
-                        }
-                    )
-                except Exception as exc:
-                    failed.append(
-                        {
-                            "device_id": device_id,
-                            "s3_path": f"s3://{bucket}/{s3_prefix}/",
-                            "error": str(exc),
-                        }
-                    )
-    except HTTPException:
-        raise
-    except (ClientError, BotoCoreError) as exc:
-        raise HTTPException(status_code=500, detail=f"S3 upload failed: {exc}") from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Certificate generation failed: {exc}") from exc
-
-    status = "success" if not failed else "partial_success"
-    if failed and not created:
-        status = "failed"
-
-    return {
-        "status": status,
-        "bucket": bucket,
-        "prefix": farm_id,
-        "dry_run": request.dry_run,
-        "generated_count": len(created),
-        "failed_count": len(failed),
-        "devices": created,
-        "failed_devices": failed,
-    }
