@@ -5,3 +5,5 @@ paho-mqtt
 python-dotenv
 mangum
 boto3
+psycopg2-binary
+cryptography

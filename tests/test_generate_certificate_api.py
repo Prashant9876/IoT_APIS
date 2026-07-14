@@ -1,6 +1,9 @@
+import os
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+
+os.environ.setdefault("SKIP_MQTT_CONNECT", "true")
 
 from app.main import app
 from app.routers import certificate_api
