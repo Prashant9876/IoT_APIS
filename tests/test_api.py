@@ -6,6 +6,7 @@ os.environ.setdefault("SKIP_MQTT_CONNECT", "true")
 
 from app.main import app
 from app import core
+from app.routers import iot_api
 
 client = TestClient(app)
 API_KEY = "test-api-key"
@@ -131,3 +132,69 @@ def test_irrigation_publishes_api_and_device_topics_with_meta(monkeypatch):
     assert "Mqtt_topic" in calls[0][1]
     assert "meta" not in calls[1][1]
     assert "Mqtt_topic" not in calls[1][1]
+
+
+def test_actuator_lcd_newschedule_publishes_after_successful_mongo_update(monkeypatch):
+    calls = []
+
+    def fake_publish(topic, payload, qos=1, retain=False):
+        calls.append((topic, payload))
+
+    monkeypatch.setattr(core.mqtt_client, "publish", fake_publish)
+    monkeypatch.setattr(
+        iot_api,
+        "update_LCD_Schedule",
+        lambda payload: {"ok": True, "updated_fields": ["schedule.L4"], "modified_count": 1},
+    )
+
+    payload = {
+        "DN": "LCD",
+        "FarmID": 120,
+        "DeviceID": ["IFLCD2110100001", "IFLCD2110100002"],
+        "rack_id": 1,
+        "total_shelves": 11,
+        "cmd": "newschedule",
+        "schedule": {"L4": ["09:15", "20:15"]},
+    }
+    response = client.post(
+        "/api/acutatorCmd",
+        headers={"x-api-key": API_KEY},
+        json=payload,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["topic"] == "farm/120/SSub"
+    assert len(calls) == 2
+    assert calls[0][0] == "farm/120/api"
+    assert calls[1][0] == "farm/120/SSub"
+
+
+def test_actuator_lcd_newschedule_returns_error_when_mongo_update_fails(monkeypatch):
+    monkeypatch.setattr(
+        iot_api,
+        "update_LCD_Schedule",
+        lambda payload: {
+            "ok": False,
+            "status_code": 503,
+            "detail": "MongoDB Error: timeout",
+        },
+    )
+
+    payload = {
+        "DN": "LCD",
+        "FarmID": 120,
+        "DeviceID": ["IFLCD2110100001", "IFLCD2110100002"],
+        "rack_id": 1,
+        "total_shelves": 11,
+        "cmd": "newschedule",
+        "schedule": {"L4": ["09:15", "20:15"]},
+    }
+    response = client.post(
+        "/api/acutatorCmd",
+        headers={"x-api-key": API_KEY},
+        json=payload,
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "MongoDB Error: timeout"}

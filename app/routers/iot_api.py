@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Header, HTTPException, Request
 from datetime import datetime, timezone
 from app.core import publish_and_response, require_keys, validate_api_key
+from app.mongo import update_LCD_Schedule, update_LCD_Mode
 
 router = APIRouter()
 
@@ -143,6 +144,22 @@ async def backend_acutator_cmd(request: Request, x_api_key: str = Header(None)):
     payload = await request.json()
 
     require_keys(payload, ("DN", "FarmID", "DeviceID"), "Missing required keys: DN or FarmID")
+    device_type = payload.get("DN")
+    if device_type == "LCD":
+        command = payload.get("cmd")
+        if command == "newschedule":
+            mongo_result = update_LCD_Schedule(payload)
+        elif command == "changemode":
+            mongo_result = update_LCD_Mode(payload)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid LCD cmd. Expected: newschedule or changemode")
+
+        if not mongo_result.get("ok"):
+            raise HTTPException(
+                status_code=mongo_result.get("status_code", 500),
+                detail=mongo_result.get("detail", "MongoDB update failed"),
+            )
+
     # 🔹 Extract request info
     client_ip = request.client.host
     forwarded_for = request.headers.get("x-forwarded-for")

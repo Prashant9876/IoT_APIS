@@ -26,6 +26,8 @@ from fastapi import HTTPException
 import paho.mqtt.client as mqtt
 from pydantic import BaseModel, ConfigDict, Field
 
+
+
 load_dotenv()
 
 
@@ -50,8 +52,8 @@ DBTABLE = os.getenv("DBTABLE", "IoT_Device_IDS")
 
 aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
 aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-aws_region = os.getenv("AWS_DEFAULT_REGION")
-secret_name = os.getenv("MQTT_CA_SECRET_NAME")
+aws_region = os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION", "ap-south-1")
+secret_name = os.getenv("MQTT_CA_SECRET_NAME", "Mqtt_CA_certs")
 CERT_S3_BUCKET = os.getenv("CERT_S3_BUCKET")
 
 
@@ -66,11 +68,25 @@ s3_client = boto3.client(
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
+MONGO_URI = os.getenv("MONGO_URI", "")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "innofarm")
+MONGO_COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME", "lcd_schedule")
+
+
+
+
+
+
 if not API_KEY:
     raise RuntimeError("Server misconfigured: API_KEY missing in environment")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("BackendMqttPublisher")
+
+
+
+
+
 
 
 class MQTTClientWrapper:
