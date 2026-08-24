@@ -142,19 +142,24 @@ async def backend_mqtt_estop_irrigation(request: Request, x_api_key: str = Heade
 async def backend_acutator_cmd(request: Request, x_api_key: str = Header(None)):
     validate_api_key(x_api_key)
     payload = await request.json()
+    mongo_flag = False
 
     require_keys(payload, ("DN", "FarmID", "DeviceID"), "Missing required keys: DN or FarmID")
     device_type = payload.get("DN")
     if device_type == "LCD":
         command = payload.get("cmd")
+        
         if command == "newschedule":
+            mongo_flag = True
             mongo_result = update_LCD_Schedule(payload)
         elif command == "changemode":
+            mongo_flag = True
             mongo_result = update_LCD_Mode(payload)
         else:
-            raise HTTPException(status_code=400, detail="Invalid LCD cmd. Expected: newschedule or changemode")
+            mongo_flag = False
+        #     raise HTTPException(status_code=400, detail="Invalid LCD cmd. Expected: newschedule or changemode")
 
-        if not mongo_result.get("ok"):
+        if mongo_flag and not mongo_result.get("ok"):
             raise HTTPException(
                 status_code=mongo_result.get("status_code", 500),
                 detail=mongo_result.get("detail", "MongoDB update failed"),
