@@ -213,6 +213,38 @@ def test_nsd_cases_last_is_preserved_and_missing_fixed_fields_are_na(monkeypatch
     assert published[0][1]["Water Temperature Sensor"] == "N/A"
 
 
+def test_smd_upload_publishes_expected_soil_sensor_payload(monkeypatch, tmp_path):
+    response, published = _upload_csv(
+        monkeypatch,
+        tmp_path,
+        "timestamp,Soil_Moist_10,Soil_Moist_30,Soil_Temp,rack,shelve\n"
+        "2026-10-22 08:30:00,10,40,23.45,1,2\n",
+        {
+            "dn": "SMD",
+            "device_id": "IFSMD2240000001",
+            "farm_id": 224,
+            "source_timezone": "Asia/Kolkata",
+        },
+    )
+
+    assert response.status_code == 200
+    assert published[0][0] == "farm/224/sensor"
+    assert published[0][1] == {
+        "timestamp": "2026-10-22T03:00:00Z",
+        "Soil_Moist_10": 10,
+        "Soil_Moist_30": 40,
+        "Soil_Temp": 23.45,
+        "rack": 1,
+        "shelve": 2,
+        "local_time": "2026-10-22 08:30:00",
+        "timezone": "Asia/Kolkata",
+        "Device_Id": "IFSMD2240000001",
+        "DN": "SMD",
+        "FarmID": 224,
+        "DeviceID": "IFSMD2240000001",
+    }
+
+
 def test_excel_upload_does_not_publish_when_s3_upload_fails(monkeypatch, tmp_path):
     published = []
 

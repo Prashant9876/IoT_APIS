@@ -39,6 +39,18 @@ FIXED_FIELDS_BY_DN = {
     ],
     "WLD": ["WaterLevel", "Device_Id", "Packet_Id", "rack_id", "DN", "timestamp"],
     "PPFD": ["PPFD", "shelve", "rack", "Device_Id", "Packet_Id", "DN", "timestamp"],
+    "SMD": [
+        "Soil_Moist_10",
+        "Soil_Moist_30",
+        "Soil_Temp",
+        "rack",
+        "shelve",
+        "Device_Id",
+        "DN",
+        "timestamp",
+        "local_time",
+        "timezone",
+    ],
 }
 ALLOWED_DN = set(FIXED_FIELDS_BY_DN)
 CUSTOM_TIMESTAMP_FORMATS = {
@@ -124,7 +136,7 @@ async def upload_excel(
     source_timezone_name = metadata_json.get("source_timezone", "Asia/Kolkata")
 
     if dn not in ALLOWED_DN:
-        raise HTTPException(status_code=400, detail="dn must be THC, NSD, WLD, or PPFD")
+        raise HTTPException(status_code=400, detail="dn must be THC, NSD, WLD, PPFD, or SMD")
     if not device_id:
         raise HTTPException(status_code=400, detail="device_id is required")
     if farm_id is None or str(farm_id).strip() == "":
