@@ -12,9 +12,10 @@ fi
 source .venv/bin/activate
 pip install -r requirements.txt
 
-if systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
-  sudo systemctl restart "$SERVICE_NAME"
-  sudo systemctl is-active "$SERVICE_NAME"
-else
-  echo "Service ${SERVICE_NAME}.service not found. Skipping restart."
+if ! sudo systemctl cat "$SERVICE_NAME" >/dev/null 2>&1; then
+  echo "Service ${SERVICE_NAME}.service not found. Run the EC2 bootstrap first."
+  exit 1
 fi
+
+sudo systemctl restart "$SERVICE_NAME"
+sudo systemctl is-active "$SERVICE_NAME"

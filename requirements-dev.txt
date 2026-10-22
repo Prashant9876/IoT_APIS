@@ -3,3 +3,4 @@ httpx
 psycopg2-binary
 cryptography
 pymongo
+pandas

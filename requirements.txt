@@ -8,3 +8,7 @@ boto3
 psycopg2-binary
 cryptography
 pymongo
+pandas
+openpyxl
+xlrd
+python-multipart

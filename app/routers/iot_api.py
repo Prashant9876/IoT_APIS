@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Header, HTTPException, Request
 from datetime import datetime, timezone
 from app.core import publish_and_response, require_keys, validate_api_key
-from app.mongo import update_LCD_Schedule, update_LCD_Mode
+from app.mongo import update_LCD_Schedule, update_LCD_Mode, update_FNC_Schedule, update_FNC_Mode
 
 router = APIRouter()
 
@@ -138,6 +138,12 @@ async def backend_mqtt_estop_irrigation(request: Request, x_api_key: str = Heade
     return publish_and_response(payload)
 
 
+
+
+
+
+
+
 @router.post("/api/acutatorCmd")
 async def backend_acutator_cmd(request: Request, x_api_key: str = Header(None)):
     validate_api_key(x_api_key)
@@ -164,6 +170,27 @@ async def backend_acutator_cmd(request: Request, x_api_key: str = Header(None)):
                 status_code=mongo_result.get("status_code", 500),
                 detail=mongo_result.get("detail", "MongoDB update failed"),
             )
+    if device_type == "FNC" or device_type == "AFC":
+        command = payload.get("cmd")
+
+        if command == "newschedule":
+            mongo_flag = True
+            mongo_result = update_FNC_Schedule(payload)
+            if mongo_flag and not mongo_result.get("ok"):
+                raise HTTPException(
+                    status_code=mongo_result.get("status_code", 500),
+                    detail=mongo_result.get("detail", "MongoDB update failed"),
+                )
+        elif command == "changemode":
+            mongo_flag = True
+            mongo_result = update_FNC_Mode(payload)
+            if mongo_flag and not mongo_result.get("ok"):
+                raise HTTPException(
+                    status_code=mongo_result.get("status_code", 500),
+                    detail=mongo_result.get("detail", "MongoDB update failed"),
+                )
+        else:
+            mongo_flag = False
 
     # 🔹 Extract request info
     client_ip = request.client.host

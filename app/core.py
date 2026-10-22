@@ -1,5 +1,6 @@
 import json
 import logging
+import mimetypes
 import os
 import threading
 import time
@@ -10,6 +11,7 @@ import re
 import psycopg2 
 from datetime import datetime, timedelta, timezone
 import pathlib
+import pandas as pd
 
 from psycopg2.extras import RealDictCursor
 from psycopg2 import sql
@@ -55,6 +57,8 @@ aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
 aws_region = os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION", "ap-south-1")
 secret_name = os.getenv("MQTT_CA_SECRET_NAME", "Mqtt_CA_certs")
 CERT_S3_BUCKET = os.getenv("CERT_S3_BUCKET")
+SENSOR_IMPORT_S3_BUCKET = os.getenv("SENSOR_IMPORT_S3_BUCKET")
+SENSOR_IMPORT_S3_REGION = os.getenv("SENSOR_IMPORT_S3_REGION", aws_region)
 
 
 
@@ -65,13 +69,19 @@ s3_client = boto3.client(
     aws_access_key_id=aws_access_key_id,
     aws_secret_access_key=aws_secret_access_key,
 )
+sensor_import_s3_client = boto3.client(
+    "s3",
+    region_name=SENSOR_IMPORT_S3_REGION,
+    aws_access_key_id=aws_access_key_id,
+    aws_secret_access_key=aws_secret_access_key,
+)
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
 MONGO_URI = os.getenv("MONGO_URI", "")
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "innofarm")
-MONGO_COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME", "lcd_schedule")
-
+MONGO_SCHEDULE_DB__NAME = os.getenv("MONGO_SCHEDULE_DB__NAME", "innofarm")
+MONGO_LIGHT_COLLECTION_NAME = os.getenv("MONGO_LIGHT_COLLECTION_NAME", "lcd_schedule")
+MONGO_FAN_COLLECTION_NAME = os.getenv("MONGO_FAN_COLLECTION_NAME", "fan_schedule")
 
 
 
@@ -159,9 +169,14 @@ class MQTTClientWrapper:
     def publish(self, topic, payload, qos=1, retain=False):
         payload_str = json.dumps(payload, default=str)
         if self.connected:
-            self.client.publish(topic, payload_str, qos=qos, retain=retain)
+            result = self.client.publish(topic, payload_str, qos=qos, retain=retain)
+            if result.rc != mqtt.MQTT_ERR_SUCCESS:
+                logger.error("MQTT publish failed for topic %s, rc=%s", topic, result.rc)
+                return False
+            return True
         else:
             logger.warning("MQTT not connected, cannot publish to topic %s", topic)
+            return False
 
 
 mqtt_client = MQTTClientWrapper(
@@ -751,3 +766,141 @@ def upload_device_crt_to_s3(
             "message": "Unexpected error",
             "error": str(e)
         }
+
+
+def _s3_path_component(value, field_name: str) -> str:
+    value = str(value).strip()
+    if not value or not re.fullmatch(r"[A-Za-z0-9._=-]+", value):
+        raise ValueError(f"{field_name} contains unsupported characters")
+    return value
+
+
+def _upload_file_to_s3(bucket: str, key: str, file_path: pathlib.Path) -> None:
+    content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+    with file_path.open("rb") as file_handle:
+        sensor_import_s3_client.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=file_handle,
+            ContentType=content_type,
+            ServerSideEncryption="AES256",
+        )
+
+
+def upload_sensor_import_to_s3(
+    farm_id,
+    dn: str,
+    device_id: str,
+    import_id: str,
+    original_file_path: pathlib.Path,
+    processed_file_path: pathlib.Path,
+    metadata: dict,
+) -> dict:
+    """Store one sensor import and its initial metadata record in S3."""
+    try:
+        if not SENSOR_IMPORT_S3_BUCKET:
+            raise ValueError("SENSOR_IMPORT_S3_BUCKET is missing in environment")
+        if not original_file_path.is_file() or not processed_file_path.is_file():
+            raise ValueError("Original or processed import file is missing")
+
+        farm_component = _s3_path_component(farm_id, "farm_id")
+        dn_component = _s3_path_component(dn.upper(), "dn")
+        device_component = _s3_path_component(device_id, "device_id")
+        import_component = _s3_path_component(import_id, "import_id")
+        prefix = (
+            f"sensor-imports/farm_id={farm_component}/dn={dn_component}/"
+            f"device_id={device_component}/import_id={import_component}"
+        )
+        original_key = f"{prefix}/original/{original_file_path.name}"
+        processed_key = f"{prefix}/processed/{processed_file_path.name}"
+        metadata_key = f"{prefix}/metadata.json"
+
+        _upload_file_to_s3(SENSOR_IMPORT_S3_BUCKET, original_key, original_file_path)
+        _upload_file_to_s3(SENSOR_IMPORT_S3_BUCKET, processed_key, processed_file_path)
+        sensor_import_s3_client.put_object(
+            Bucket=SENSOR_IMPORT_S3_BUCKET,
+            Key=metadata_key,
+            Body=json.dumps(metadata, default=str, indent=2).encode("utf-8"),
+            ContentType="application/json",
+            ServerSideEncryption="AES256",
+        )
+        return {
+            "success": True,
+            "bucket": SENSOR_IMPORT_S3_BUCKET,
+            "prefix": prefix,
+            "original_key": original_key,
+            "processed_key": processed_key,
+            "metadata_key": metadata_key,
+        }
+    except (ClientError, BotoCoreError, OSError, TypeError, ValueError) as error:
+        return {"success": False, "message": "Sensor import S3 upload failed", "error": str(error)}
+
+
+def upload_sensor_import_metadata_to_s3(metadata_key: str, metadata: dict) -> dict:
+    """Replace an import metadata record with its latest publishing state."""
+    try:
+        if not SENSOR_IMPORT_S3_BUCKET:
+            raise ValueError("SENSOR_IMPORT_S3_BUCKET is missing in environment")
+        sensor_import_s3_client.put_object(
+            Bucket=SENSOR_IMPORT_S3_BUCKET,
+            Key=metadata_key,
+            Body=json.dumps(metadata, default=str, indent=2).encode("utf-8"),
+            ContentType="application/json",
+            ServerSideEncryption="AES256",
+        )
+        return {"success": True, "metadata_key": metadata_key}
+    except (ClientError, BotoCoreError, TypeError, ValueError) as error:
+        return {"success": False, "message": "Sensor import metadata update failed", "error": str(error)}
+
+
+
+def check_timestamp_format(timestamp_value):
+
+    # Excel native datetime
+    if isinstance(timestamp_value, (datetime, pd.Timestamp)):
+        return "Excel Native Date/Time"
+
+    # Number-based formats
+    if isinstance(timestamp_value, (int, float)):
+
+        timestamp_number = str(int(timestamp_value))
+
+        # Example: 1761049800
+        if re.fullmatch(r"\d{10}", timestamp_number):
+            return "Unix Epoch Timestamp in Seconds"
+
+        # Example: 1761049800000
+        if re.fullmatch(r"\d{13}", timestamp_number):
+            return "Epoch Timestamp in Milliseconds"
+
+        # Example: 46316.41667
+        if 20000 <= float(timestamp_value) <= 80000:
+            return "Excel Native Serial Number"
+
+    # ISO Example: 2026-10-21T10:00:00
+    timestamp_text = str(timestamp_value).strip()
+
+    if re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}",
+        timestamp_text
+    ):
+        return "ISO 8601 String"
+
+    # Examples: 21/10/2026 10:00 or 21-10-2026 10:00
+    custom_formats = [
+        "%d/%m/%Y %H:%M:%S",
+        "%d/%m/%Y %H:%M",
+        "%d-%m-%Y %H:%M:%S",
+        "%d-%m-%Y %H:%M",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+    ]
+
+    for format_value in custom_formats:
+        try:
+            datetime.strptime(timestamp_text, format_value)
+            return f"Custom String: {format_value}"
+        except ValueError:
+            pass
+
+    return "Unknown timestamp format"
