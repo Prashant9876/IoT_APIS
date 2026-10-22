@@ -189,6 +189,12 @@ async def backend_acutator_cmd(request: Request, x_api_key: str = Header(None)):
                     status_code=mongo_result.get("status_code", 500),
                     detail=mongo_result.get("detail", "MongoDB update failed"),
                 )
+        elif command == "changestate":
+            farm_id = payload.get("FarmID")
+            if farm_id in (120, 121):
+                device_type_value = payload.get("device_type")
+                if isinstance(device_type_value, str) and device_type_value.startswith("fog"):
+                    payload["device_type"] = device_type_value.replace("fog", "fan", 1)
         else:
             mongo_flag = False
 
