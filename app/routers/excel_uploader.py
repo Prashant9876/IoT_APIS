@@ -45,7 +45,7 @@ CUSTOM_TIMESTAMP_FORMATS = {
     "Custom String: %d/%m/%Y %H:%M:%S": "%d/%m/%Y %H:%M:%S",
     "Custom String: %d/%m/%Y %H:%M": "%d/%m/%Y %H:%M",
     "Custom String: %d-%m-%Y %H:%M:%S": "%d-%m-%Y %H:%M:%S",
-    "Custom String: %d-%m-%Y %H:%M": "%d-%m-%Y %H",
+    "Custom String: %d-%m-%Y %H:%M": "%d-%m-%Y %H:%M",
     "Custom String: %Y-%m-%d %H:%M:%S": "%Y-%m-%d %H:%M:%S",
     "Custom String: %Y-%m-%d %H:%M": "%Y-%m-%d %H:%M",
 }

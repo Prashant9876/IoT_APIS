@@ -147,6 +147,7 @@ def test_excel_file_adds_utc_column_and_publishes(monkeypatch, tmp_path):
     [
         ("21/10/2026 10:00:00", "Custom String: %d/%m/%Y %H:%M:%S"),
         ("21/10/2026 10:00", "Custom String: %d/%m/%Y %H:%M"),
+        ("21-10-2026 10:00", "Custom String: %d-%m-%Y %H:%M"),
         ("2026-10-21T10:00:00", "ISO 8601 String"),
         ("2026-10-21T10:00:00Z", "ISO 8601 String"),
         ("2026-10-21T10:00:00+05:30", "ISO 8601 String"),
