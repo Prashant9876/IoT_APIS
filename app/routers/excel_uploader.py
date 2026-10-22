@@ -190,13 +190,17 @@ async def upload_excel(
             if sheet_dns and sheet_dns != {dn}:
                 raise HTTPException(status_code=400, detail="DN values in the file must match metadata.dn")
 
-        dataframe["timestamp_utc"] = dataframe["timestamp"].map(
+        # Keep the source value for traceability and publish the normalized UTC
+        # value under the standard timestamp key.
+        dataframe["local_time"] = dataframe["timestamp"]
+        dataframe["timestamp"] = dataframe["local_time"].map(
             lambda value: _parse_timestamp_to_utc(value, detected_format, source_timezone)
             if pd.notna(value)
             else None
         )
+        dataframe["timezone"] = source_timezone_name
         dataframe = _add_fixed_fields(dataframe, dn, device_id)
-        dataframe = dataframe.sort_values("timestamp_utc", ascending=True, na_position="last").reset_index(drop=True)
+        dataframe = dataframe.sort_values("timestamp", ascending=True, na_position="last").reset_index(drop=True)
 
         if extension == ".csv":
             dataframe.to_csv(processed_file_path, index=False)

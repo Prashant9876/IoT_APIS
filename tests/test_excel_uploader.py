@@ -66,10 +66,12 @@ def test_excel_upload_converts_sorts_and_publishes_sequentially(monkeypatch, tmp
     assert body["status"] == "published"
     assert body["topic"] == "farm/224/sensor"
     assert body["published_records"] == 2
-    assert body["sample_rows"][0]["timestamp_utc"] == "2026-10-21T03:30:00Z"
+    assert body["sample_rows"][0]["timestamp"] == "2026-10-21T03:30:00Z"
+    assert body["sample_rows"][0]["local_time"] == "2026-10-21 09:00:00"
+    assert body["sample_rows"][0]["timezone"] == "Asia/Kolkata"
     assert len(published) == 2
     assert [item[0] for item in published] == ["farm/224/sensor", "farm/224/sensor"]
-    assert [item[1]["timestamp_utc"] for item in published] == [
+    assert [item[1]["timestamp"] for item in published] == [
         "2026-10-21T03:30:00Z",
         "2026-10-21T04:30:00Z",
     ]
@@ -137,7 +139,7 @@ def test_excel_file_adds_utc_column_and_publishes(monkeypatch, tmp_path):
     )
 
     assert response.status_code == 200
-    assert response.json()["sample_rows"][0]["timestamp_utc"] == "2026-10-21T04:30:00Z"
+    assert response.json()["sample_rows"][0]["timestamp"] == "2026-10-21T04:30:00Z"
     assert published[0][0] == "farm/224/sensor"
     assert published[0][1]["Humidity"] == 60
 
@@ -188,7 +190,7 @@ def test_excel_serial_timestamp_is_rounded_to_the_nearest_second(monkeypatch, tm
 
     assert response.status_code == 200
     assert response.json()["timestamp_format"] == "Excel Native Serial Number"
-    assert published[0][1]["timestamp_utc"] == "2026-10-22T02:30:00Z"
+    assert published[0][1]["timestamp"] == "2026-10-22T02:30:00Z"
 
 
 def test_nsd_cases_last_is_preserved_and_missing_fixed_fields_are_na(monkeypatch, tmp_path):
@@ -260,7 +262,7 @@ def test_sensor_import_s3_helper_uploads_files_and_metadata(monkeypatch, tmp_pat
     original_file = tmp_path / "sensor.csv"
     processed_file = tmp_path / "sensor_utc_sorted.csv"
     original_file.write_text("timestamp,Etemp\n2026-10-21 10:00:00,25.5\n")
-    processed_file.write_text("timestamp,timestamp_utc,Etemp\n2026-10-21 10:00:00,2026-10-21T04:30:00Z,25.5\n")
+    processed_file.write_text("local_time,timestamp,timezone,Etemp\n2026-10-21 10:00:00,2026-10-21T04:30:00Z,Asia/Kolkata,25.5\n")
     monkeypatch.setattr(core, "SENSOR_IMPORT_S3_BUCKET", "test-sensor-imports")
     monkeypatch.setattr(core, "sensor_import_s3_client", FakeS3Client())
 
