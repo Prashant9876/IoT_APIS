@@ -43,7 +43,7 @@ FIXED_FIELDS_BY_DN = {
 ALLOWED_DN = set(FIXED_FIELDS_BY_DN)
 CUSTOM_TIMESTAMP_FORMATS = {
     "Custom String: %d/%m/%Y %H:%M:%S": "%d/%m/%Y %H:%M:%S",
-    "Custom String: %d/%m/%Y %H:%M": "%d/%m/%Y %H",
+    "Custom String: %d/%m/%Y %H:%M": "%d/%m/%Y %H:%M",
     "Custom String: %d-%m-%Y %H:%M:%S": "%d-%m-%Y %H:%M:%S",
     "Custom String: %d-%m-%Y %H:%M": "%d-%m-%Y %H",
     "Custom String: %Y-%m-%d %H:%M:%S": "%Y-%m-%d %H:%M:%S",
@@ -64,6 +64,9 @@ def _parse_timestamp_to_utc(value, detected_format: str, source_timezone: ZoneIn
         parsed = datetime.fromtimestamp(float(value) / 1000, tz=timezone.utc)
     elif detected_format == "Excel Native Serial Number":
         parsed = pd.Timestamp("1899-12-30") + pd.to_timedelta(float(value), unit="D")
+        # Excel serial values are floating point numbers. Round to the nearest
+        # second so binary precision does not produce false microseconds.
+        parsed = parsed.round("s")
     elif detected_format == "Excel Native Date/Time":
         parsed = pd.Timestamp(value).to_pydatetime()
     elif detected_format == "ISO 8601 String":

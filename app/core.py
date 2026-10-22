@@ -881,8 +881,8 @@ def check_timestamp_format(timestamp_value):
     timestamp_text = str(timestamp_value).strip()
 
     if re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}",
-        timestamp_text
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:\d{2})?",
+        timestamp_text,
     ):
         return "ISO 8601 String"
 

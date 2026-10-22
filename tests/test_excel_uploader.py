@@ -146,7 +146,10 @@ def test_excel_file_adds_utc_column_and_publishes(monkeypatch, tmp_path):
     ("timestamp", "expected_format"),
     [
         ("21/10/2026 10:00:00", "Custom String: %d/%m/%Y %H:%M:%S"),
+        ("21/10/2026 10:00", "Custom String: %d/%m/%Y %H:%M"),
         ("2026-10-21T10:00:00", "ISO 8601 String"),
+        ("2026-10-21T10:00:00Z", "ISO 8601 String"),
+        ("2026-10-21T10:00:00+05:30", "ISO 8601 String"),
         ("1761049800", "Unix Epoch Timestamp in Seconds"),
         ("1761049800000", "Epoch Timestamp in Milliseconds"),
     ],
@@ -167,6 +170,24 @@ def test_excel_upload_accepts_supported_timestamp_styles(monkeypatch, tmp_path, 
     assert response.status_code == 200
     assert response.json()["timestamp_format"] == expected_format
     assert published[0][0] == "farm/224/sensor"
+
+
+def test_excel_serial_timestamp_is_rounded_to_the_nearest_second(monkeypatch, tmp_path):
+    response, published = _upload_csv(
+        monkeypatch,
+        tmp_path,
+        "timestamp,Etemp\n46317.3333333333,25.5\n",
+        {
+            "dn": "THC",
+            "device_id": "IFTHC2240000001",
+            "farm_id": 224,
+            "source_timezone": "Asia/Kolkata",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["timestamp_format"] == "Excel Native Serial Number"
+    assert published[0][1]["timestamp_utc"] == "2026-10-22T02:30:00Z"
 
 
 def test_nsd_cases_last_is_preserved_and_missing_fixed_fields_are_na(monkeypatch, tmp_path):
