@@ -1,5 +1,6 @@
 import io
 import json
+import uuid
 
 import pandas as pd
 import pytest
@@ -79,7 +80,7 @@ def test_excel_upload_converts_sorts_and_publishes_sequentially(monkeypatch, tmp
     assert published[0][1]["DN"] == "THC"
     assert published[0][1]["DeviceID"] == "IFTHC2240000001"
     assert published[0][1]["CO2"] == "N/A"
-    assert published[0][1]["Packet_Id"] == "N/A"
+    assert uuid.UUID(published[0][1]["Packet_Id"])
     assert published[0][1]["Device_Id"] == "IFTHC2240000001"
     assert not (tmp_path / f"{body['import_id']}_utc_sorted.csv").exists()
     assert body["s3_bucket"] == "test-sensor-imports"
@@ -243,6 +244,24 @@ def test_smd_upload_publishes_expected_soil_sensor_payload(monkeypatch, tmp_path
         "FarmID": 224,
         "DeviceID": "IFSMD2240000001",
     }
+
+
+def test_packet_id_is_generated_and_ignores_the_uploaded_value(monkeypatch, tmp_path):
+    response, published = _upload_csv(
+        monkeypatch,
+        tmp_path,
+        "timestamp,Etemp,Packet_Id\n2026-10-22 08:30:00,25.5,uploaded-packet\n",
+        {
+            "dn": "THC",
+            "device_id": "IFTHC2240000001",
+            "farm_id": 224,
+            "source_timezone": "Asia/Kolkata",
+        },
+    )
+
+    assert response.status_code == 200
+    assert published[0][1]["Packet_Id"] != "uploaded-packet"
+    assert uuid.UUID(published[0][1]["Packet_Id"])
 
 
 def test_excel_upload_does_not_publish_when_s3_upload_fails(monkeypatch, tmp_path):

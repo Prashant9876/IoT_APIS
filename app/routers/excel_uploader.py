@@ -105,6 +105,11 @@ def _is_missing(value) -> bool:
 
 def _add_fixed_fields(dataframe: pd.DataFrame, dn: str, device_id) -> pd.DataFrame:
     """Ensure every published record follows the fixed schema for its DN."""
+    # Packet IDs are server-generated so spreadsheet uploads cannot collide or
+    # accidentally reuse an earlier packet identifier.
+    if "Packet_Id" in FIXED_FIELDS_BY_DN[dn]:
+        dataframe["Packet_Id"] = [str(uuid.uuid4()) for _ in dataframe.index]
+
     for field in FIXED_FIELDS_BY_DN[dn]:
         if field not in dataframe.columns:
             dataframe[field] = "N/A"
