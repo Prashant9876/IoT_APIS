@@ -49,14 +49,8 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT }}
-          source: |
-            app/**
-            scripts/**
-            deploy/**
-            requirements.txt
-            requirements-dev.txt
-            .env.example
-            README.md
+          # appleboy/scp-action expects a comma-separated list, not YAML lines.
+          source: "app,scripts,deploy,requirements.txt,requirements-dev.txt,.env.example,README.md"
           target: "/home/ubuntu/iot_apis_release"
 
       - name: Deploy over SSH
