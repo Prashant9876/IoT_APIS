@@ -12,6 +12,7 @@ import psycopg2
 from datetime import datetime, timedelta, timezone
 import pathlib
 import pandas as pd
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from psycopg2.extras import RealDictCursor
 from psycopg2 import sql
@@ -61,6 +62,12 @@ SENSOR_IMPORT_S3_BUCKET = os.getenv("SENSOR_IMPORT_S3_BUCKET")
 SENSOR_IMPORT_S3_REGION = os.getenv("SENSOR_IMPORT_S3_REGION", aws_region)
 
 
+
+REDIS_HOST = os.getenv("REDIS_HOST")
+REDIS_PORT = os.getenv("REDIS_PORT")
+REDIS_USERNAME = os.getenv("REDIS_USERNAME", "default")
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+REDIS_TIME_KEY = os.getenv("REDIS_TIME_KEY", "IoT_Ingestion_script:Script_1_FarmIDs")
 
 # Create S3 client only once
 s3_client = boto3.client(
@@ -202,7 +209,16 @@ def require_keys(payload: dict, keys: Iterable[str], message: str):
     if not all(k in payload for k in keys):
         raise HTTPException(status_code=400, detail=message)
 
+def is_valid_timezone(timezone_name, message: str):
+    if not isinstance(timezone_name, str):
+        raise HTTPException(status_code=400, detail=message)
 
+    try:
+        ZoneInfo(timezone_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise HTTPException(status_code=400, detail=message)
+
+    return True
 
 def get_mqtt_topic(payload: dict):
     farm_id = payload.get("FarmID")

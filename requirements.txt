@@ -12,3 +12,5 @@ pandas
 openpyxl
 xlrd
 python-multipart
+redis
+tzdata

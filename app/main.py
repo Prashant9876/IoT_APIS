@@ -9,6 +9,7 @@ from app.routers.robot_api import router as robot_router
 from app.routers.other_api import router as other_router
 from app.routers.certificate_api import router as certificate_router
 from app.routers.excel_uploader import router as excel_uploader_router
+from app.routers.redis_update import router as redis_update_router
 
 app = FastAPI()
 
@@ -39,5 +40,5 @@ app.include_router(robot_router)
 app.include_router(other_router)
 app.include_router(certificate_router)
 app.include_router(excel_uploader_router)
-
+app.include_router(redis_update_router)
 handler = Mangum(app, lifespan="off")
