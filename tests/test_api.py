@@ -198,3 +198,49 @@ def test_actuator_lcd_newschedule_returns_error_when_mongo_update_fails(monkeypa
 
     assert response.status_code == 503
     assert response.json() == {"detail": "MongoDB Error: timeout"}
+
+
+def test_actuator_changestate_converts_fog_to_fan_for_farms_120_and_121(monkeypatch):
+    calls = []
+
+    def fake_publish(topic, payload, qos=1, retain=False):
+        calls.append((topic, payload))
+
+    monkeypatch.setattr(core.mqtt_client, "publish", fake_publish)
+
+    for farm_id in (120, 121):
+        response = client.post(
+            "/api/acutatorCmd",
+            headers={"x-api-key": API_KEY},
+            json={
+                "DN": "FNC",
+                "FarmID": farm_id,
+                "DeviceID": f"IFFNC{farm_id}0000001",
+                "cmd": "changestate",
+                "device_type": "fog1",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["payload"]["device_type"] == "fan1"
+
+    assert [call[1]["device_type"] for call in calls if "device_type" in call[1]] == ["fan1"] * 4
+
+
+def test_actuator_changestate_keeps_fog_for_other_farms(monkeypatch):
+    monkeypatch.setattr(core.mqtt_client, "publish", lambda *_args, **_kwargs: None)
+
+    response = client.post(
+        "/api/acutatorCmd",
+        headers={"x-api-key": API_KEY},
+        json={
+            "DN": "FNC",
+            "FarmID": 119,
+            "DeviceID": "IFFNC1190000001",
+            "cmd": "changestate",
+            "device_type": "fog1",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["payload"]["device_type"] == "fog1"
